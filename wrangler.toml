@@ -1,0 +1,11 @@
+name = "meemu-move"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+
+[assets]
+directory = "./public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "meemu-move"
+database_id = "PASTE_YOUR_D1_ID_HERE"
