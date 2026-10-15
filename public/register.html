@@ -1,0 +1,81 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E7C86">
+<title>Register as a driver or captain · Meemu Move</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<style>
+:root{--ink:#0B2B3A;--mut:#5C7480;--bg:#E9F5F3;--card:#fff;--line:#D3E3E0;--lag:#0E7C86;--sun:#FFB81C;--cor:#E8553A}
+@media(prefers-color-scheme:dark){:root{--ink:#E6F2F1;--mut:#97B2B9;--bg:#0A1D26;--card:#10303D;--line:#1D4655}}
+body{margin:0 auto;max-width:520px;padding:12px 16px calc(24px + env(safe-area-inset-bottom,0));background:var(--bg);color:var(--ink);font:400 15px/1.45 system-ui,sans-serif}
+header{display:flex;align-items:center;gap:10px;margin-bottom:8px}header b{font-size:19px;display:block;line-height:1.1}header small{color:var(--mut)}
+h2{font-size:16px;margin:18px 0 6px;color:var(--lag)}
+label{display:block;font-weight:600;margin-bottom:2px}
+input,select{width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:inherit;font:inherit;margin:3px 0 10px}
+.seg{display:flex;gap:8px;margin:12px 0}.seg button{flex:1;padding:12px;border-radius:12px;border:2px solid var(--line);background:var(--card);color:inherit;font:inherit;font-weight:700;cursor:pointer}.seg .on{border-color:var(--lag);color:var(--lag)}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pv img{max-width:100%;max-height:140px;border-radius:10px;margin-bottom:10px}
+.chk{display:flex;gap:10px;align-items:flex-start;font-weight:400}.chk input{width:auto;margin-top:4px}
+.cta{display:block;width:100%;padding:14px;border:0;border-radius:12px;background:var(--sun);color:#0B2B3A;font:inherit;font-weight:800;font-size:16px;cursor:pointer;margin-top:10px}
+.cta:disabled{opacity:.6}.mut{color:var(--mut)}#er{color:var(--cor);min-height:1.3em;font-weight:600}a{color:var(--lag);font-weight:600}
+:focus-visible{outline:3px solid var(--lag);outline-offset:2px}
+</style></head><body>
+<header><img src="/logo.svg" alt="" width="36" height="36"><div><b>Meemu Move</b><small>Driver and captain registration</small></div></header>
+<main id="m">
+ <p class="mut">Apply to drive a vehicle or captain a boat with Meemu Move. An admin checks every application and contacts you by SMS or phone. If you are approved, you get your driver ID and PIN.</p>
+ <div class="seg"><button type="button" id="rd" class="on">Driver</button><button type="button" id="rc">Captain</button></div>
+ <h2>About you</h2>
+ <label for="nm">Full name</label><input id="nm" maxlength="60" autocomplete="name">
+ <label for="ph">Mobile number (+960)</label><input id="ph" type="tel" inputmode="numeric" maxlength="7" placeholder="7XXXXXX">
+ <label for="is">Island</label><select id="is"></select>
+ <label for="idn">ID card number</label><input id="idn" maxlength="20" autocapitalize="characters" placeholder="A123456">
+ <h2>Licence</h2>
+ <label for="lic" id="l1">Driving licence number</label><input id="lic" maxlength="30">
+ <label for="lex">Licence expiry date</label><input id="lex" type="date">
+ <h2 id="h3">Your vehicle</h2>
+ <label for="vt">Ride type</label><select id="vt"></select>
+ <label for="mk" id="l2">Vehicle make and model</label><input id="mk" maxlength="40">
+ <label for="pl" id="l3">Vehicle plate number</label><input id="pl" maxlength="20" autocapitalize="characters">
+ <div class="g2"><div><label for="st">Passenger seats</label><input id="st" inputmode="numeric" maxlength="2"></div><div><label for="ex">Years of experience</label><input id="ex" inputmode="numeric" maxlength="2" placeholder="optional"></div></div>
+ <h2>Photos</h2>
+ <label for="f1">Your photo (face clearly visible)</label><input id="f1" type="file" accept="image/*"><div id="p1" class="pv"></div>
+ <label for="f2">Photo of your licence</label><input id="f2" type="file" accept="image/*"><div id="p2" class="pv"></div>
+ <label for="f3" id="l4">Photo of your vehicle</label><input id="f3" type="file" accept="image/*"><div id="p3" class="pv"></div>
+ <label for="nt">Anything else we should know (optional)</label><input id="nt" maxlength="300">
+ <label class="chk"><input type="checkbox" id="cn"><span>I confirm the information is correct and agree that Meemu Move may use it to check my application.</span></label>
+ <div id="ts"></div><div id="er" role="alert"></div>
+ <button class="cta" id="sb">Send application</button>
+ <p class="mut"><a href="/">Back to the rider app</a></p>
+</main>
+<script>
+const TS_KEY=''; // Cloudflare Turnstile site key (same one as in index.html)
+const ISL=['Dhiggaru','Maduvvari','Raiymandhoo','Veyvah','Mulah','Muli','Naalaafushi','Kolhufushi'];
+const $=s=>document.querySelector(s);
+const E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const T={driver:{l1:'Driving licence number',l2:'Vehicle make and model (e.g. Suzuki Alto)',l3:'Vehicle plate number',l4:'Photo of your vehicle',h:'Your vehicle'},
+ captain:{l1:"Captain's or boat operator licence number",l2:'Vessel name and type (e.g. Speedboat Nalaa)',l3:'Vessel registration number',l4:'Photo of your vessel',h:'Your vessel'}};
+let role='driver',VT=[],PH={person:'',licence:'',vehicle:''},tsTok='';
+const say=t=>{$('#er').textContent=t||''};
+$('#is').innerHTML='<option value="">Choose your island</option>'+ISL.map(i=>`<option>${i}</option>`).join('');
+function fillVT(){const l=VT.filter(v=>(v.mode==='sea')===(role==='captain'));$('#vt').innerHTML=l.map(v=>`<option value="${E(v.id)}">${E(v.name)}</option>`).join('')}
+function setRole(r){role=r;$('#rd').className=r==='driver'?'on':'';$('#rc').className=r==='captain'?'on':'';const t=T[r];['l1','l2','l3','l4'].forEach(k=>$('#'+k).textContent=t[k]);$('#h3').textContent=t.h;fillVT()}
+$('#rd').onclick=()=>setRole('driver');$('#rc').onclick=()=>setRole('captain');
+fetch('/api/vehicle-types').then(r=>r.json()).then(r=>{VT=r.types||[];fillVT()}).catch(()=>say('Could not load ride types. Reload the page.'));
+async function shrink(file){
+ const img=await new Promise((ok,no)=>{const u=URL.createObjectURL(file),i=new Image();i.onload=()=>{URL.revokeObjectURL(u);ok(i)};i.onerror=no;i.src=u});
+ let sc=Math.min(1,900/Math.max(img.width,img.height)),q=.7,out='';
+ for(let k=0;k<6;k++){const c=document.createElement('canvas');c.width=Math.max(1,Math.round(img.width*sc));c.height=Math.max(1,Math.round(img.height*sc));c.getContext('2d').drawImage(img,0,0,c.width,c.height);out=c.toDataURL('image/jpeg',q);if(out.length<=440000)return out;sc*=.8;q=.6}
+ throw new Error('big')}
+['person','licence','vehicle'].forEach((k,i)=>{$('#f'+(i+1)).onchange=async e=>{const f=e.target.files[0];PH[k]='';$('#p'+(i+1)).innerHTML='';say();if(!f)return;
+ try{PH[k]=await shrink(f);$('#p'+(i+1)).innerHTML=`<img src="${PH[k]}" alt="Photo preview">`}catch(x){say('That photo could not be used. Try a different one.')}}});
+if(TS_KEY){const go=()=>window.turnstile.render('#ts',{sitekey:TS_KEY,callback:t=>{tsTok=t}});const e=document.createElement('script');e.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';e.onload=go;document.head.appendChild(e)}
+$('#sb').onclick=async()=>{say();
+ const v=id=>$('#'+id).value.trim(),phone=v('ph').replace(/\D/g,''),idn=v('idn').replace(/\s/g,'').toUpperCase();
+ const need=[[v('nm').length>=2,'Enter your full name.'],[/^[79]\d{6}$/.test(phone),'Enter your 7-digit mobile number. It starts with 7 or 9.'],[v('is'),'Choose your island.'],[/^[A-Z0-9]{4,20}$/.test(idn),'Enter your ID card number.'],[v('lic').length>=3,'Enter your licence number.'],[v('lex'),'Enter the licence expiry date.'],[v('vt'),'Choose a ride type.'],[v('mk').length>=2,'Enter the '+(role==='captain'?'vessel':'vehicle')+' details.'],[v('pl').length>=2,'Enter the '+(role==='captain'?'registration':'plate')+' number.'],[+v('st')>=1,'Enter the number of passenger seats.'],[PH.person&&PH.licence&&PH.vehicle,'Add all three photos.'],[$('#cn').checked,'Tick the confirmation box.'],[!TS_KEY||tsTok,'Complete the check above.']];
+ for(const [ok,m] of need)if(!ok)return say(m);
+ const body={role,name:v('nm'),phone,island:v('is'),id_no:idn,licence_no:v('lic'),licence_exp:v('lex'),vtype:v('vt'),make:v('mk'),plate:v('pl'),seats:+v('st'),exp_years:v('ex')===''?null:+v('ex'),note:v('nt'),consent:true,photos:PH,ts:tsTok};
+ $('#sb').disabled=true;
+ const r=await fetch('/api/register',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)}).then(x=>x.json()).catch(()=>({error:'Network problem. Try again.'}));
+ $('#sb').disabled=false;
+ if(!r.ok){say(r.error||'Could not send the application.');if(TS_KEY&&window.turnstile){try{turnstile.reset();tsTok=''}catch(e){}}return}
+ $('#m').innerHTML=`<h2>Application sent</h2><p>Your reference is <b>${E(r.ref)}</b>.</p><p>An admin will review your application and contact you on +960 ${E(phone)}. If you are approved, you will receive your driver ID and PIN.</p><p><a href="/">Back to the rider app</a></p>`;scrollTo(0,0)};
+</script></body></html>

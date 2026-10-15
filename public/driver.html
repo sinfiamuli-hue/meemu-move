@@ -1,0 +1,40 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Meemu Move Driver</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<style>
+:root{--ink:#0B2B3A;--mut:#5C7480;--bg:#E9F5F3;--card:#fff;--line:#D3E3E0;--lag:#0E7C86;--sun:#FFB81C;--cor:#E8553A}
+@media(prefers-color-scheme:dark){:root{--ink:#E6F2F1;--mut:#97B2B9;--bg:#0A1D26;--card:#10303D;--line:#1D4655}}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.45 system-ui,sans-serif;padding:16px;max-width:480px;margin:auto}
+h1{font-size:20px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+input,button{font:inherit;color:inherit;box-sizing:border-box;width:100%;padding:11px;border-radius:10px;border:1px solid var(--line);background:var(--bg);margin:4px 0}
+button{cursor:pointer;background:var(--sun);border:0;font-weight:800;color:#0B2B3A}button.alt{background:none;border:2px solid var(--cor);color:var(--cor)}
+a{color:var(--lag);font-weight:600}.mut{color:var(--mut)}#err{color:var(--cor)}
+</style></head><body>
+<h1><img src="/logo.svg" alt="" width="26" height="26" style="vertical-align:middle"> Meemu Move Driver</h1><div id="a"></div><div id="err" role="status"></div>
+<script>
+const $=s=>document.querySelector(s);
+const E=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const g=k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},s=(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}};
+let id=g('d_id'),pin=g('d_pin'),on=false,wid=null,last=0,tm=0;
+const api=async(u,b)=>{try{const r=await fetch('/api/driver/'+u,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({id,pin,...b})});return await r.json()}catch(e){return{error:'Network problem.'}}};
+const err=t=>$('#err').textContent=t||'';
+function login(){$('#a').innerHTML=`<div class="card"><label>Driver ID<input id="i" value="${E(id)}" autocomplete="username"></label><label>PIN<input id="p" type="password" inputmode="numeric" value="${E(pin)}" autocomplete="current-password"></label><button id="go">Go online</button><p class="mut"><a href="/register.html">New driver or captain? Register here</a></p></div>`;
+ $('#go').onclick=async()=>{id=$('#i').value.trim();pin=$('#p').value.trim();const r=await api('requests',{});if(r.error)return err(r.error);s('d_id',id);s('d_pin',pin);start()}}
+function start(){on=true;err('');
+ if(!navigator.geolocation)err('Location is not available on this device.');
+ else wid=navigator.geolocation.watchPosition(p=>{const t=Date.now();if(t-last<4000)return;last=t;api('location',{lat:p.coords.latitude,lng:p.coords.longitude})},()=>err('Allow location access so riders can see you.'),{enableHighAccuracy:true});
+ load();tm=setInterval(load,3000)}
+function stop(){on=false;if(wid!=null)navigator.geolocation.clearWatch(wid);clearInterval(tm);login()}
+const nav=(la,lo)=>`<a href="https://www.google.com/maps/dir/?api=1&destination=${la},${lo}&travelmode=driving" target="_blank" rel="noopener">Navigate in Google Maps</a>`;
+const NX={accepted:['arrived','I have arrived'],arrived:['started','Start trip'],started:['completed','Complete trip']};
+async function load(){const r=await api('requests',{});if(r.error)return err(r.error);
+ const rs=r.rides||[];
+ $('#a').innerHTML=`<div class="card">Online. Your location is shared while this page is open. Keep the screen on.<button class="alt" id="off">Go offline</button></div>`+(rs.length?rs.map(x=>{const mine=x.driver_id===id;
+  return `<div class="card"><b>${E(x.pn)} to ${E(x.dn)}</b><br><span class="mut">${E(x.opt)} · MVR ${x.fare}${x.sched?' · For '+new Date(x.sched).toLocaleString():''}${mine?' · '+x.status:''}</span><br>${x.note?'<span class="mut">Note: '+E(x.note)+'</span><br>':''}`+
+  (mine?nav(x.status==='started'?x.dlat:x.plat,x.status==='started'?x.dlng:x.plng)+`<button data-n="${x.id}" data-s="${NX[x.status][0]}">${NX[x.status][1]}</button>`:`<button data-acc="${x.id}">Accept ride</button>`)+'</div>'}).join(''):'<p class="mut">No ride requests right now.</p>');
+ $('#off').onclick=stop;
+ document.querySelectorAll('[data-acc]').forEach(b=>b.onclick=async()=>{const x=await api('accept',{ride:b.dataset.acc});err(x.error);load()});
+ document.querySelectorAll('[data-n]').forEach(b=>b.onclick=async()=>{const x=await api('status',{ride:b.dataset.n,status:b.dataset.s});err(x.error);load()})}
+login();
+</script></body></html>

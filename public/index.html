@@ -1,0 +1,168 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0E7C86">
+<title>Meemu Move</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/icon-192.png"><link rel="manifest" href="/manifest.webmanifest">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--ink:#0B2B3A;--mut:#5C7480;--bg:#E9F5F3;--card:#fff;--line:#D3E3E0;--lag:#0E7C86;--sun:#FFB81C;--cor:#E8553A}
+@media(prefers-color-scheme:dark){:root{--ink:#E6F2F1;--mut:#97B2B9;--bg:#0A1D26;--card:#10303D;--line:#1D4655}}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font:400 15px/1.45 system-ui,'Noto Sans Thaana',sans-serif;padding-top:env(safe-area-inset-top,0)}
+header{display:flex;align-items:center;gap:10px;padding:8px 16px}
+header b{font-size:19px;font-weight:800;display:block;line-height:1.1}header small{color:var(--mut);font-size:12px}
+#map{flex:1;min-height:220px}
+#sheet{background:var(--card);border-top:1px solid var(--line);padding:14px 16px calc(14px + env(safe-area-inset-bottom,0));max-height:58%;overflow-y:auto}
+button,input,select{font:inherit;color:inherit}button{cursor:pointer}
+label{display:block;font-weight:600}
+input,select{width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);margin:3px 0 8px}
+.chip{padding:6px 12px;border-radius:99px;border:1px solid var(--lag);background:none;color:var(--lag);font-weight:600;margin:0 6px 6px 0}
+.chip.g{border-color:var(--line);color:var(--mut)}
+.opt{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:start;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:none;margin-bottom:8px}
+.opt.on{border-color:var(--lag)}
+.cta{display:block;width:100%;padding:13px;border:0;border-radius:12px;background:var(--sun);color:#0B2B3A;font-weight:800;font-size:16px;margin-top:8px}
+.cta.alt{background:none;border:2px solid var(--cor);color:var(--cor)}
+.pin{font-size:16px;width:30px;height:30px;border-radius:50%;background:var(--sun);border:2px solid #0B2B3A;display:grid;place-items:center;font-weight:800;color:#0B2B3A}
+.mut{color:var(--mut)}#msg{color:var(--cor);min-height:1.2em}
+.ok{background:#1E9E5A22;border:1px solid #1E9E5A;border-radius:10px;padding:8px 10px}
+h3{margin:12px 0 4px;font-size:15px}
+.bk{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+:focus-visible{outline:3px solid var(--lag);outline-offset:2px}
+</style></head><body>
+<header><img src="/logo.svg" alt="" width="36" height="36"><div><b>Meemu Move</b><small>Book a ride or hire a vessel across Meemu Atoll</small></div><a href="/register.html" style="margin-inline-start:auto;font-size:13px;font-weight:600;color:var(--lag)">Drive with us</a></header>
+<div id="map" role="application" aria-label="Map of Meemu Atoll"></div><section id="sheet"></section>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// MAP SETTINGS: 'osm' is free with no card. For Google, set provider:'google' and paste a key.
+// center/zoom show the whole of Meemu Atoll (approximate: adjust if needed).
+const CFG={provider:'osm',googleKey:'',center:[2.92,73.55],zoom:10,turnstileKey:''};
+const ISL=['Dhiggaru','Maduvvari','Raiymandhoo','Veyvah','Mulah','Muli','Naalaafushi','Kolhufushi'];
+const $=s=>document.querySelector(s);
+const E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ls={get:k=>{try{return localStorage.getItem(k)||''}catch(e){return ''}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+const ICON={bike:'🏍️',tuk:'🛺',eco:'🚕',comfort:'🚗',van:'🚐',speed:'🚤',dhoni:'🛥️'};
+const LBL={requested:'Finding a driver…',accepted:'Your driver is on the way',arrived:'Your driver has arrived',started:'On your trip',completed:'Trip complete',cancelled:'Ride cancelled'};
+let M,P=null,D=null,sel='',rid=ls.get('mr_ride'),timer=0,state=null,tok=ls.get('mr_tok'),phone=ls.get('mr_phone'),step=0,tsTok='',devc='',PLC=[],VT=[],want='',mode='now',when='',note='',mine=[],flash='';
+const km=(a,b)=>{const r=Math.PI/180,dx=(b[1]-a[1])*r*Math.cos((a[0]+b[0])*r/2),dy=(b[0]-a[0])*r;return Math.hypot(dx,dy)*6371*1.3};
+const dist=()=>P&&D?km([P.lat,P.lng],[D.lat,D.lng]):0;
+// vehicles stay on one island, boats go between islands (when both places are known)
+const avail=()=>{const a=P&&P.isl,b=D&&D.isl;return a&&b?VT.filter(v=>(v.mode==='sea')===(a!==b)):VT};
+const cur=()=>{const a=avail();return a.find(v=>v.id===sel)||a[0]||null};
+const fare=v=>Math.round(Math.max(v.min_fare,v.base+v.per_km*dist()));
+const ico=v=>v?(ICON[v.id]||(v.mode==='sea'?'🚤':'🚕')):'🚕';
+const fmt=t=>new Date(t).toLocaleString([],{weekday:'short',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+const minWhen=()=>new Date(Date.now()+15*60000-new Date().getTimezoneOffset()*60000).toISOString().slice(0,16);
+const api=async(u,b)=>{try{const h={};if(b)h['content-type']='application/json';if(tok)h.authorization='Bearer '+tok;const r=await fetch(u,{method:b?'POST':'GET',headers:h,body:b?JSON.stringify(b):undefined});if(r.status===401&&tok&&!u.startsWith('/api/auth')){logout();return{error:'Please sign in again.'}}return await r.json()}catch(e){return{error:'Network problem. Try again.'}}};
+const msg=t=>{const m=$('#msg');if(m)m.textContent=t};
+async function initMap(){
+ const el=$('#map');
+ if(CFG.provider==='google'&&CFG.googleKey){
+  await new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://maps.googleapis.com/maps/api/js?key='+CFG.googleKey;s.onload=ok;s.onerror=no;document.head.appendChild(s)});
+  const m=new google.maps.Map(el,{center:{lat:CFG.center[0],lng:CFG.center[1]},zoom:CFG.zoom,disableDefaultUI:true,mapTypeControl:true,clickableIcons:false,gestureHandling:'greedy'});
+  m.addListener('click',e=>tap(e.latLng.lat(),e.latLng.lng()));
+  const mk={};let ln=null;
+  return{mark(id,lat,lng,label){if(lat==null){if(mk[id]){mk[id].setMap(null);delete mk[id]}return}const pos={lat,lng};if(mk[id]){mk[id].setPosition(pos);mk[id].setLabel(label)}else mk[id]=new google.maps.Marker({position:pos,map:m,label})},
+  line(a){if(ln){ln.setMap(null);ln=null}if(a.length)ln=new google.maps.Polyline({path:a.map(p=>({lat:p[0],lng:p[1]})),map:m,strokeColor:'#0E7C86',strokeWeight:4})},
+  fit(a){const b=new google.maps.LatLngBounds();a.forEach(p=>b.extend({lat:p[0],lng:p[1]}));m.fitBounds(b,60)},
+  center(lat,lng){m.setCenter({lat,lng});m.setZoom(16)}}}
+ const m=L.map(el).setView(CFG.center,CFG.zoom);
+ const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(m),sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Imagery © Esri'});
+ L.control.layers({Map:osm,Satellite:sat}).addTo(m);
+ m.on('click',e=>tap(e.latlng.lat,e.latlng.lng));
+ const mk={};let ln=null;
+ return{mark(id,lat,lng,label){if(lat==null){if(mk[id]){m.removeLayer(mk[id]);delete mk[id]}return}
+  const ic=()=>L.divIcon({className:'',html:'<div class="pin">'+label+'</div>',iconSize:[30,30],iconAnchor:[15,15]});
+  if(mk[id]){mk[id].setLatLng([lat,lng]);if(mk[id]._l!==label){mk[id].setIcon(ic());mk[id]._l=label}}else{mk[id]=L.marker([lat,lng],{icon:ic()}).addTo(m);mk[id]._l=label}},
+ line(a){if(ln){m.removeLayer(ln);ln=null}if(a.length)ln=L.polyline(a,{color:'#0E7C86',weight:4,dashArray:'2 8'}).addTo(m)},
+ fit(a){m.fitBounds(a,{padding:[50,50]})},
+ center(lat,lng){m.setView([lat,lng],16)}}}
+function draw(){
+ const v=cur();
+ M.mark('p',P?P.lat:null,P?P.lng:null,P&&D&&v?ico(v):'A');M.mark('d',D?D.lat:null,D?D.lng:null,'B');
+ const l=P&&D?[[P.lat,P.lng],[D.lat,D.lng]]:[];M.line(l);if(l.length)M.fit(l)}
+function tap(lat,lng){if(rid||!tok)return;const w=want||(!P?'p':'d');want='';flash='';if(w==='p')P={lat,lng,n:'Pickup pin',isl:''};else D={lat,lng,n:'Drop-off pin',isl:''};draw();render()}
+function locate(){if(!navigator.geolocation)return msg('Location is not available on this device.');
+ navigator.geolocation.getCurrentPosition(p=>{P={lat:p.coords.latitude,lng:p.coords.longitude,n:'My location',isl:''};want='';M.center(P.lat,P.lng);draw();render()},()=>msg('Allow location access, or choose a place from the list.'))}
+function pSel(id,cur,w){const mineSel=id==='sp';
+ let o=`<option value="">Choose ${mineSel?'pickup':'drop-off'}</option><option value="map" ${want===w||(cur&&!cur.pid&&cur.n!=='My location')?'selected':''}>Choose on map</option>`;
+ if(mineSel)o+=`<option value="me" ${cur&&cur.n==='My location'?'selected':''}>My location</option>`;
+ const names=[...ISL,...new Set(PLC.map(x=>x.island||'Other').filter(i=>!ISL.includes(i)))];
+ names.forEach(i=>{const g=PLC.filter(x=>(x.island||'Other')===i);if(g.length)o+=`<optgroup label="${E(i)}">${g.map(x=>`<option value="${x.id}" ${cur&&cur.pid===x.id?'selected':''}>${E(x.name)}</option>`).join('')}</optgroup>`});
+ return `<select id="${id}">${o}</select>`}
+function pick(el,set,w){el.onchange=()=>{const v=el.value;flash='';
+ if(v==='')set(null);
+ else if(v==='map'){want=w;msg('Tap the map to set the '+(w==='p'?'pickup':'drop-off')+'.');return}
+ else if(v==='me'){locate();return}
+ else{const x=PLC.find(q=>String(q.id)===v);set(x?{lat:x.lat,lng:x.lng,n:x.name,pid:x.id,isl:x.island||''}:null);if(x&&!(P&&D))M.center(x.lat,x.lng)}
+ want='';draw();render()}}
+function ts(){if(!CFG.turnstileKey)return;const go=()=>window.turnstile.render('#ts',{sitekey:CFG.turnstileKey,callback:t=>{tsTok=t}});if(window.turnstile)return go();const e=document.createElement('script');e.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';e.onload=go;document.head.appendChild(e)}
+function loginView(){const s=$('#sheet');
+ if(step===0){
+  s.innerHTML=`<b>Sign in</b><label>Mobile number (+960)<input id="ph" type="tel" inputmode="numeric" maxlength="7" value="${E(phone)}" placeholder="7XXXXXX"></label><div id="ts"></div><button class="cta" id="snd">Send code</button><div id="msg"></div>`;ts();
+  $('#snd').onclick=async()=>{const p=$('#ph').value.replace(/\D/g,'');
+   if(!/^[79]\d{6}$/.test(p))return msg('Enter your 7-digit mobile number. It starts with 7 or 9.');
+   if(CFG.turnstileKey&&!tsTok)return msg('Complete the check above first.');
+   $('#snd').disabled=true;const r=await api('/api/auth/send',{phone:p,ts:tsTok});$('#snd').disabled=false;
+   if(r.ok){phone=p;ls.set('mr_phone',p);devc=r.dev_code||'';step=1;render()}
+   else{msg(r.error||'Could not send the code.');if(CFG.turnstileKey&&window.turnstile){try{turnstile.reset();tsTok=''}catch(e){}}}}}
+ else{
+  s.innerHTML=`<b>Enter the code</b><p class="mut">We sent a 6-digit code to +960 ${E(phone)}.</p>${devc?`<p class="mut">Test code: ${E(devc)}</p>`:''}<input id="cd" inputmode="numeric" autocomplete="one-time-code" maxlength="6" aria-label="6-digit code"><button class="cta" id="vf">Verify</button><button class="chip" id="bk">Change number</button><div id="msg"></div>`;
+  $('#vf').onclick=async()=>{const r=await api('/api/auth/verify',{phone,code:$('#cd').value.trim()});if(r.token){tok=r.token;ls.set('mr_tok',tok);step=0;devc='';render();if(rid){poll();timer=setInterval(poll,3000)}else loadMine()}else msg(r.error||'Wrong code.')};
+  $('#bk').onclick=()=>{step=0;render()}}}
+async function logout(){if(tok)api('/api/auth/logout',{});clearInterval(timer);tok='';ls.set('mr_tok','');ls.set('mr_ride','');rid=null;state=null;mine=[];flash='';P=D=null;if(M){M.mark('c',null);draw()}step=0;render()}
+function render(){
+ if(!tok)return loginView();
+ const s=$('#sheet');
+ if(rid&&state){const r=state.ride,d=state.driver,done=r.status==='completed'||r.status==='cancelled';
+  s.innerHTML=`<b>${LBL[r.status]||r.status}</b><p class="mut">${E(r.opt||'')} · ${E(r.pn)} to ${E(r.dn)} · MVR ${r.fare}</p>${d?`<p><b>${E(d.name)}</b><br><span class="mut">${E(d.car)} · ${E(d.plate)}</span></p>`:''}<div id="msg"></div>${done?'<button class="cta" id="nr">New ride</button>':(['requested','accepted'].includes(r.status)?'<button class="cta alt" id="cx">Cancel ride</button>':'')}`;
+  const nr=$('#nr');if(nr)nr.onclick=newRide;const cx=$('#cx');if(cx)cx.onclick=async()=>{const x=await api('/api/rides/'+rid+'/cancel',{});if(x.error)msg(x.error);else poll()};return}
+ if(rid){s.innerHTML='<p>Loading your ride…</p>';return}
+ let h=(flash?`<p class="ok">${E(flash)}</p>`:'')+`<label>Pickup${pSel('sp',P,'p')}</label><label>Drop-off${pSel('sd',D,'d')}</label>`;
+ if(P||D)h+='<button class="chip" id="clr">Clear</button>';
+ if(P&&D){
+  const a=avail(),v=cur();
+  if(!VT.length)h+='<p class="mut">Loading ride types…</p>';
+  else if(!a.length)h+='<p class="mut">No ride type is available for this trip yet.</p>';
+  else h+=`<p class="mut">About ${dist().toFixed(1)} km${P.isl&&D.isl&&P.isl!==D.isl?' · between islands, boats only':''}</p>`
+   +a.map(o=>`<button class="opt ${v&&v.id===o.id?'on':''}" data-id="${E(o.id)}"><span><b>${ico(o)} ${E(o.name)}</b><br><small class="mut">${o.seats} seat${o.seats>1?'s':''}</small></span><b>MVR ${fare(o)}</b></button>`).join('')
+   +`<div><button class="chip ${mode==='now'?'':'g'}" data-m="now">Ride now</button><button class="chip ${mode==='later'?'':'g'}" data-m="later">Book for later</button></div>`
+   +(mode==='later'?`<label>Date and time<input id="wh" type="datetime-local" value="${E(when)}" min="${minWhen()}"></label>`:'')
+   +`<label>Note for the driver (optional)<input id="nt" maxlength="140" value="${E(note)}" placeholder="Passengers, luggage, hire details"></label><button class="cta" id="req">${mode==='later'?'Book for later':'Request ride'} · MVR ${fare(v)}</button>`}
+ const up=mine.filter(x=>x.sched&&['requested','accepted'].includes(x.status));
+ if(up.length)h+='<h3>Upcoming bookings</h3>'+up.map(x=>`<div class="bk"><div><b>${fmt(x.sched)}</b> · ${E(x.opt)}<br><span class="mut">${E(x.pn)} to ${E(x.dn)} · MVR ${x.fare}<br>${x.dname?'Driver: '+E(x.dname):'Waiting for a driver'}</span></div><button class="chip g" data-cx="${x.id}">Cancel</button></div>`).join('');
+ s.innerHTML=h+'<div id="msg"></div><button class="chip" id="out">Sign out</button>';
+ $('#out').onclick=logout;
+ pick($('#sp'),v=>{P=v},'p');pick($('#sd'),v=>{D=v},'d');
+ const c=$('#clr');if(c)c.onclick=()=>{P=D=null;flash='';draw();render()};
+ s.querySelectorAll('[data-id]').forEach(b=>b.onclick=()=>{sel=b.dataset.id;if(P)M.mark('p',P.lat,P.lng,ico(VT.find(x=>x.id===sel)));render()});
+ s.querySelectorAll('[data-m]').forEach(b=>b.onclick=()=>{mode=b.dataset.m;render()});
+ const w=$('#wh');if(w)w.onchange=()=>{when=w.value};
+ const nt=$('#nt');if(nt)nt.oninput=()=>{note=nt.value};
+ const q=$('#req');if(q)q.onclick=request;
+ s.querySelectorAll('[data-cx]').forEach(b=>b.onclick=async()=>{const x=await api('/api/rides/'+b.dataset.cx+'/cancel',{});if(x.error)msg(x.error);loadMine()})}
+async function request(){
+ const v=cur();if(!v)return msg('Choose a ride type.');
+ if(P.pid&&P.pid===D.pid)return msg('Pickup and drop-off are the same place.');
+ let sched=null;
+ if(mode==='later'){sched=when?new Date(when).getTime():0;if(!(sched>Date.now()+9*60000))return msg('Pick a date and time at least 10 minutes from now.')}
+ const r=await api('/api/rides',{ppid:P.pid||null,dpid:D.pid||null,pn:P.n,plat:P.lat,plng:P.lng,dn:D.n,dlat:D.lat,dlng:D.lng,vtype:v.id,sched,note:note.trim()});
+ if(!r.id)return msg(r.error||'Could not send the request.');
+ if(sched){flash='Booked for '+fmt(sched)+'. A driver will be assigned before then.';P=D=null;note='';when='';mode='now';draw();loadMine();render()}
+ else{rid=r.id;ls.set('mr_ride',rid);render();poll();timer=setInterval(poll,3000)}}
+async function poll(){
+ const r=await api('/api/rides/'+rid);
+ if(r.error){if(r.error==='not found')newRide();return}
+ state=r;const d=r.driver;
+ M.mark('c',d&&d.lat!=null?d.lat:null,d?d.lng:null,ico(VT.find(x=>x.id===r.ride.vtype)));render();
+ if(['completed','cancelled'].includes(r.ride.status)){clearInterval(timer);ls.set('mr_ride','')}}
+function newRide(){clearInterval(timer);rid=null;state=null;P=D=null;ls.set('mr_ride','');M.mark('c',null);draw();render();loadMine()}
+async function loadMine(){
+ if(!tok)return;const r=await api('/api/my-rides');if(!r.rides)return;mine=r.rides;
+ if(!rid){const now=Date.now(),a=mine.find(x=>(['arrived','started'].includes(x.status)&&now-x.created<86400000)||(x.status==='accepted'&&Math.abs((x.sched||x.created)-now)<7200000)||(x.status==='requested'&&!x.sched&&now-x.created<600000));
+  if(a){rid=a.id;ls.set('mr_ride',rid);clearInterval(timer);poll();timer=setInterval(poll,3000);return}}
+ if(!rid)render()}
+api('/api/places').then(r=>{PLC=r.places||[];if(tok&&!rid)render()});
+api('/api/vehicle-types').then(r=>{VT=r.types||[];if(tok&&!rid)render()});
+setInterval(()=>{if(tok&&!rid&&!$('#wh')&&!$('#nt:focus'))loadMine()},20000);
+initMap().then(m=>{M=m;render();if(rid&&tok){poll();timer=setInterval(poll,3000)}else loadMine()}).catch(()=>{$('#sheet').textContent='The map could not load. Check your connection and map key.'});
+</script></body></html>
