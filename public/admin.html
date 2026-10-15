@@ -1,0 +1,138 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex"><title>Meemu Move Admin</title>
+<link rel="icon" href="/logo.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--ink:#0B2B3A;--mut:#5C7480;--bg:#E9F5F3;--card:#fff;--line:#D3E3E0;--lag:#0E7C86;--sun:#FFB81C;--cor:#E8553A;--ok:#1E9E5A}
+@media(prefers-color-scheme:dark){:root{--ink:#E6F2F1;--mut:#97B2B9;--bg:#0A1D26;--card:#10303D;--line:#1D4655}}
+body{margin:0 auto;max-width:640px;padding:16px;background:var(--bg);color:var(--ink);font:400 15px/1.45 system-ui,sans-serif}
+h1{font-size:20px;margin:0 0 12px}h2{font-size:16px;margin:0 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+input,button,select{font:inherit;color:inherit;box-sizing:border-box;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg)}
+input,select{width:100%;margin:3px 0 8px}button{cursor:pointer}
+.go{background:var(--sun);color:#0B2B3A;border:0;font-weight:800}.bad{color:var(--cor);border-color:var(--cor);background:none}
+.tabs{display:flex;gap:6px;margin-bottom:10px}.tabs button{flex:1 1 auto}.tabs .on{background:var(--lag);color:#fff;border:0}
+.r{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}
+.mut{color:var(--mut);font-size:13px}.bad-t{color:var(--cor);font-size:13px}.on-dot{color:var(--ok);font-weight:700}#err{color:var(--cor);min-height:1.3em}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:8px}.g3{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.g3 img{width:100%;border-radius:10px}.kv{display:flex;justify-content:space-between;gap:12px;padding:5px 0;border-bottom:1px solid var(--line)}.kv b{text-align:end;word-break:break-word}a{color:var(--lag);font-weight:600}
+:focus-visible{outline:3px solid var(--lag);outline-offset:2px}
+</style></head><body>
+<h1><img src="/logo.svg" alt="" width="28" height="28" style="vertical-align:middle"> Meemu Move Admin</h1>
+<div id="gate" class="card"><label>Admin key<input id="k" type="password" autocomplete="current-password"></label><button class="go" id="in">Sign in</button></div>
+<div id="app" hidden>
+ <div class="tabs"><button id="t1" class="on">Drivers</button><button id="t2">Rides</button><button id="t3">Places</button><button id="t4">Vehicles</button><button id="t5">Applications</button><button id="out">Sign out</button></div>
+ <section id="s1">
+  <div class="card"><h2 id="ft">Add a driver</h2>
+   <div class="g2"><label>Driver ID<input id="fi" maxlength="20" autocapitalize="none"></label><label>PIN<input id="fp" inputmode="numeric" maxlength="8" placeholder="4 to 8 digits"></label></div>
+   <label>Name<input id="fn" maxlength="40"></label>
+   <label>Vehicle type<select id="fv"></select></label>
+   <div class="g2"><label>Car<input id="fc" maxlength="30"></label><label>Plate<input id="fl" maxlength="12"></label></div>
+   <p class="mut" id="fh">The driver signs in at /driver.html with this ID and PIN.</p>
+   <button class="go" id="sv">Save driver</button> <button id="cl">Clear</button></div>
+  <div id="dl"></div></section>
+ <section id="s2" hidden><div id="rl"></div></section>
+ <section id="s3" hidden>
+  <div id="am" style="height:300px;border-radius:14px;border:1px solid var(--line);margin-bottom:10px"></div>
+  <p class="mut" id="pn2">Choose a place below, then tap the map where it is. Use the layer button on the map for satellite view.</p>
+  <div class="r"><button class="go" id="psv" hidden>Save location</button><button id="pgps">Use my GPS</button></div>
+  <div class="card" style="margin-top:10px"><label>Island<select id="pis"></select></label><label>Add a place (include the island name, e.g. Veyvah Mosque)<input id="pnew" maxlength="60"></label><button id="padd">Add place</button></div>
+  <div id="pl"></div></section>
+ <section id="s4" hidden>
+  <div class="card"><h2>Vehicle types</h2>
+   <div class="g2"><label>ID (new)<input id="vi" maxlength="16" autocapitalize="none" placeholder="e.g. bike"></label><label>Name<input id="vn" maxlength="30"></label></div>
+   <div class="g2"><label>Seats<input id="vs" inputmode="numeric"></label><label>Base fare (MVR)<input id="vb" inputmode="decimal"></label></div>
+   <div class="g2"><label>Per km (MVR)<input id="vk" inputmode="decimal"></label><label>Minimum fare (MVR)<input id="vm" inputmode="decimal"></label></div>
+   <label>Type<select id="vmo"><option value="land">Land vehicle (stays on one island)</option><option value="sea">Boat or vessel (between islands)</option></select></label>
+   <label><input type="checkbox" id="va" checked style="width:auto"> Shown to riders</label>
+   <p class="mut">Fare = base + per km x distance, never below the minimum. Drivers only receive rides of their own vehicle type.</p>
+   <button class="go" id="vsv">Save vehicle type</button> <button id="vcl">Clear</button></div>
+  <div id="vl"></div></section>
+ <section id="s5" hidden><div id="ad" class="card" hidden></div><div id="al"></div></section>
+</div>
+<div id="err" role="status"></div>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $=s=>document.querySelector(s);
+const E=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let ak='';try{ak=sessionStorage.getItem('ak')||''}catch(e){}
+let tab=1,DR=[],VT=[];
+const err=t=>$('#err').textContent=t||'';
+async function api(a,b){try{const r=await fetch('/api/admin/'+a,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer '+ak},body:JSON.stringify(b||{})});const j=await r.json();if(r.status===401){out(j.error);return{error:j.error}}return j}catch(e){return{error:'Network problem.'}}}
+function out(m){ak='';try{sessionStorage.removeItem('ak')}catch(e){}$('#app').hidden=true;$('#gate').hidden=false;err(m||'')}
+function show(){$('#gate').hidden=true;$('#app').hidden=false;err();load();badge()}
+function setTab(n){tab=n;[1,2,3,4,5].forEach(i=>{$('#s'+i).hidden=n!==i;$('#t'+i).className=n===i?'on':''});if(n===3)initAM();else load()}
+async function load(){if(!ak)return;if(tab===3)return loadPlaces();if(tab===4)return loadVT();if(tab===5)return loadApps();
+ if(tab===1){const vr=await api('vtypes');VT=vr.vtypes||[];fillVT();const r=await api('drivers');if(r.error)return err(r.error);DR=r.drivers;
+  $('#dl').innerHTML=DR.length?DR.map(d=>{const on=d.updated&&Date.now()-d.updated<60000;
+   return `<div class="card r"><div><b>${E(d.name)}</b> <span class="mut">(${E(d.id)})</span><br><span class="mut">${E(d.car)} · ${E(d.plate)} · ${E(vname(d.vtype))}${d.role==='captain'?' · Captain':''}${d.island?' · '+E(d.island):''}${d.phone?' · +960 '+E(d.phone):''}</span><br>${on?`<span class="on-dot">Online</span> · <a href="https://www.google.com/maps?q=${d.lat},${d.lng}" target="_blank" rel="noopener">See on map</a>`:`<span class="mut">${d.updated?'Last seen '+new Date(d.updated).toLocaleString():'Never online'}</span>`}</div><div><button data-e="${E(d.id)}">Edit</button> <button class="bad" data-d="${E(d.id)}">Remove</button></div></div>`}).join(''):'<p class="mut">No drivers yet. Add your first driver above.</p>';
+  document.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>edit(b.dataset.e));
+  document.querySelectorAll('[data-d]').forEach(b=>b.onclick=async()=>{if(!confirm('Remove driver '+b.dataset.d+'? They will not be able to sign in.'))return;const r=await api('delete',{id:b.dataset.d});err(r.error);load()})}
+ else{const r=await api('rides');if(r.error)return err(r.error);
+  $('#rl').innerHTML=r.rides.length?r.rides.map(x=>{const live=['requested','accepted','arrived','started'].includes(x.status);
+   return `<div class="card r"><div><b>${E(x.pn)} to ${E(x.dn)}</b><br><span class="mut">${x.sched?'Scheduled for '+new Date(x.sched).toLocaleString():new Date(x.created).toLocaleString()} · ${E(x.opt)} · MVR ${x.fare}<br>Rider +960 ${E(x.rider)} · Driver ${E(x.dname||'none yet')}${x.note?'<br>Note: '+E(x.note):''}</span></div><div><b>${E(x.status)}</b>${live?`<br><button class="bad" data-c="${E(x.id)}">Cancel</button>`:''}</div></div>`}).join(''):'<p class="mut">No rides yet.</p>';
+  document.querySelectorAll('[data-c]').forEach(b=>b.onclick=async()=>{if(!confirm('Cancel this ride?'))return;const r=await api('cancel',{id:b.dataset.c});err(r.error);load()})}}
+function edit(id){const d=DR.find(x=>x.id===id);if(!d)return;$('#fi').value=d.id;$('#fi').readOnly=true;$('#fn').value=d.name;$('#fv').value=d.vtype||($('#fv').options[0]?$('#fv').options[0].value:'');$('#fc').value=d.car||'';$('#fl').value=d.plate||'';$('#fp').value='';
+ $('#ft').textContent='Edit '+d.name;$('#fh').textContent='Leave the PIN empty to keep the current one. Enter a new PIN to reset it.';scrollTo(0,0)}
+function clearForm(){['fi','fn','fc','fl','fp'].forEach(i=>$('#'+i).value='');$('#fi').readOnly=false;$('#ft').textContent='Add a driver';$('#fh').textContent='The driver signs in at /driver.html with this ID and PIN.'}
+$('#sv').onclick=async()=>{const r=await api('save',{id:$('#fi').value,name:$('#fn').value,car:$('#fc').value,plate:$('#fl').value,vtype:$('#fv').value,pin:$('#fp').value});if(r.error)return err(r.error);err();clearForm();load()};
+$('#cl').onclick=()=>{clearForm();err()};
+$('#in').onclick=async()=>{ak=$('#k').value;const r=await api('drivers');if(r.error){if(!$('#err').textContent)err(r.error);return}try{sessionStorage.setItem('ak',ak)}catch(e){}show()};
+$('#k').addEventListener('keydown',e=>{if(e.key==='Enter')$('#in').click()});
+const ISL=['Dhiggaru','Maduvvari','Raiymandhoo','Veyvah','Mulah','Muli','Naalaafushi','Kolhufushi'];
+$('#pis').innerHTML=ISL.map(i=>`<option>${i}</option>`).join('');
+let PL=[],sel=null,pend=null,AM=null,layer=null;
+function initAM(){
+ if(AM){setTimeout(()=>AM.invalidateSize(),50);return loadPlaces()}
+ AM=L.map('am').setView([2.92,73.55],10);
+ const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap contributors'}).addTo(AM),sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Imagery © Esri'});
+ L.control.layers({Map:osm,Satellite:sat}).addTo(AM);layer=L.layerGroup().addTo(AM);
+ AM.on('click',e=>{if(sel==null)return err('Choose a place in the list first, then tap the map.');err();pend=[e.latlng.lat,e.latlng.lng];drawP()});
+ setTimeout(()=>AM.invalidateSize(),50);loadPlaces()}
+function drawP(){layer.clearLayers();
+ PL.forEach(p=>{if(p.lat==null||(p.id===sel&&pend))return;L.circleMarker([p.lat,p.lng],{radius:7,color:'#0E7C86',fillColor:'#FFB81C',fillOpacity:1}).bindTooltip(p.name).addTo(layer)});
+ if(pend)L.circleMarker(pend,{radius:9,color:'#E8553A',fillColor:'#E8553A',fillOpacity:.9}).bindTooltip('New position').addTo(layer);
+ $('#psv').hidden=!pend}
+async function loadPlaces(){const r=await api('places');if(r.error)return err(r.error);PL=r.places;
+ $('#pl').innerHTML=PL.length?PL.map(p=>`<div class="card r"><div><b>${E(p.name)}</b> <span class="mut">· ${E(p.island||'island not set')}</span><br><span class="${p.lat==null?'bad-t':'mut'}">${p.lat==null?'Not placed yet. Riders cannot pick it.':p.lat.toFixed(5)+', '+p.lng.toFixed(5)}</span></div><div><button data-p="${p.id}" class="${sel===p.id?'on':''}">${p.lat==null?'Place on map':'Move'}</button> <button class="bad" data-x="${p.id}">Remove</button></div></div>`).join(''):'<p class="mut">No places yet.</p>';
+ document.querySelectorAll('[data-p]').forEach(b=>b.onclick=()=>pickP(+b.dataset.p));
+ document.querySelectorAll('[data-x]').forEach(b=>b.onclick=async()=>{const p=PL.find(q=>q.id===+b.dataset.x);if(!confirm('Remove '+p.name+'?'))return;const r=await api('place_delete',{id:p.id});err(r.error);if(sel===p.id){sel=null;pend=null}loadPlaces()});
+ drawP()}
+function pickP(id){sel=id;pend=null;err();const p=PL.find(q=>q.id===id);$('#pn2').textContent='Tap the map to place: '+p.name;if(p.lat!=null)AM.setView([p.lat,p.lng],17);else{const q=PL.filter(x=>x.island===p.island&&x.lat!=null);if(q.length)AM.setView([q.reduce((s,x)=>s+x.lat,0)/q.length,q.reduce((s,x)=>s+x.lng,0)/q.length],15)}loadPlaces()}
+$('#psv').onclick=async()=>{const p=PL.find(q=>q.id===sel);if(!p||!pend)return;const r=await api('place_save',{id:p.id,name:p.name,lat:pend[0],lng:pend[1],sort:p.sort,island:p.island||'Muli'});if(r.error)return err(r.error);err();pend=null;sel=null;$('#pn2').textContent='Saved. Choose another place to continue.';loadPlaces()};
+$('#pgps').onclick=()=>{if(sel==null)return err('Choose a place in the list first.');if(!navigator.geolocation)return err('Location is not available on this device.');navigator.geolocation.getCurrentPosition(g=>{pend=[g.coords.latitude,g.coords.longitude];AM.setView(pend,18);drawP()},()=>err('Allow location access, or tap the map.'))};
+$('#padd').onclick=async()=>{const nm=$('#pnew').value.trim();if(!nm)return err('Enter a place name.');const r=await api('place_save',{name:nm,island:$('#pis').value});if(r.error)return err(r.error);err();$('#pnew').value='';loadPlaces()};
+const vname=id=>(VT.find(v=>v.id===id)||{}).name||'No type';
+let APPS=[];
+async function badge(){const r=await api('apps');if(!r.apps)return;const n=r.apps.filter(a=>a.status==='pending').length;$('#t5').textContent='Applications'+(n?' ('+n+')':'')}
+setInterval(()=>{if(ak&&tab!==5&&document.visibilityState==='visible')badge()},30000);
+async function loadApps(){const r=await api('apps');if(r.error)return err(r.error);APPS=r.apps;
+ $('#al').innerHTML=APPS.length?APPS.map(a=>`<div class="card r"><div><b>${E(a.name)}</b> <span class="mut">· ${a.role==='captain'?'Captain':'Driver'} · ${E(a.island)}</span><br><span class="mut">${E(a.make)} · ${E(a.plate)} · +960 ${E(a.phone)}<br>${new Date(a.created).toLocaleDateString()} · <b>${E(a.status)}</b></span></div><button data-r="${E(a.id)}">${a.status==='pending'?'Review':'View'}</button></div>`).join(''):'<p class="mut">No applications yet.</p>';
+ document.querySelectorAll('[data-r]').forEach(b=>b.onclick=()=>review(b.dataset.r));
+ const n=APPS.filter(a=>a.status==='pending').length;$('#t5').textContent='Applications'+(n?' ('+n+')':'')}
+function closeAd(){$('#ad').hidden=true;$('#ad').innerHTML=''}
+async function review(id){const r=await api('app',{id});if(r.error)return err(r.error);const a=r.app,cap=a.role==='captain',kv=(k,v)=>`<div class="kv"><span class="mut">${k}</span><b>${E(v==null||v===''?'-':v)}</b></div>`;
+ const img=(s,t)=>/^data:image\/jpeg;base64,[A-Za-z0-9+\/=]+$/.test(s||'')?`<div><img src="${s}" alt="${t}"><div class="mut">${t}</div></div>`:'<div class="mut">No photo</div>';
+ const ad=$('#ad');ad.hidden=false;
+ ad.innerHTML=`<h2>${E(a.name)} <span class="mut">(${cap?'Captain':'Driver'})</span></h2>`+kv('Reference',a.id)+kv('Status',a.status+(a.reason?' · '+a.reason:''))+kv('Mobile','+960 '+a.phone)+kv('Island',a.island)+kv('ID card number',a.id_no)+kv(cap?'Captain licence':'Driving licence',a.licence_no)+kv('Licence expires',a.licence_exp)+kv('Ride type',vname(a.vtype))+kv(cap?'Vessel':'Vehicle',a.make)+kv(cap?'Registration':'Plate',a.plate)+kv('Seats',a.seats)+kv('Experience (years)',a.exp_years)+kv('Note',a.note)
+  +`<div class="g3" style="margin:10px 0">${img(a.photo_person,'Person')}${img(a.photo_licence,'Licence')}${img(a.photo_vehicle,cap?'Vessel':'Vehicle')}</div>`
+  +(a.status==='pending'?`<button class="go" id="ap">Approve</button><label>Reason if rejecting<input id="rj" maxlength="140"></label><button class="bad" id="rjb">Reject</button> `:'')
+  +`<button id="adc">Close</button> <button class="bad" id="adel">Delete record</button>`;
+ scrollTo(0,0);
+ $('#adc').onclick=closeAd;
+ $('#adel').onclick=async()=>{if(!confirm('Delete this application and its photos? This cannot be undone.'))return;const x=await api('app_delete',{id});err(x.error);closeAd();loadApps()};
+ const ap=$('#ap');if(ap)ap.onclick=async()=>{if(!confirm('Approve '+a.name+'? A driver account will be created.'))return;const x=await api('app_approve',{id});if(x.error)return err(x.error);err();
+  ad.innerHTML=`<h2>Approved</h2><p>Driver ID: <b>${E(x.driver_id)}</b><br>PIN: <b>${E(x.pin)}</b></p><p class="mut">${x.sms===true?'These details were sent to the driver by SMS.':'SMS was not sent. Give the ID and PIN to the driver. The PIN is shown only once.'}</p><button id="adc2">Close</button>`;
+  $('#adc2').onclick=closeAd;loadApps()};
+ const rb=$('#rjb');if(rb)rb.onclick=async()=>{const x=await api('app_reject',{id,reason:$('#rj').value});if(x.error)return err(x.error);err();closeAd();loadApps()}}
+function fillVT(){const c=$('#fv').value;$('#fv').innerHTML=VT.filter(v=>v.active||v.id===c).map(v=>`<option value="${E(v.id)}">${E(v.name)}</option>`).join('');if(c)$('#fv').value=c}
+async function loadVT(){const r=await api('vtypes');if(r.error)return err(r.error);VT=r.vtypes;
+ $('#vl').innerHTML=VT.map(v=>`<div class="card r"><div><b>${E(v.name)}</b> <span class="mut">(${E(v.id)}) · ${v.mode==='sea'?'Boat':'Land'} · ${v.seats} seat${v.seats>1?'s':''}</span><br><span class="mut">Base ${v.base} + ${v.per_km}/km · minimum ${v.min_fare} · ${v.active?'Shown to riders':'Hidden'}</span></div><button data-v="${E(v.id)}">Edit</button></div>`).join('');
+ document.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{const v=VT.find(x=>x.id===b.dataset.v);$('#vi').value=v.id;$('#vi').readOnly=true;$('#vn').value=v.name;$('#vs').value=v.seats;$('#vb').value=v.base;$('#vk').value=v.per_km;$('#vm').value=v.min_fare;$('#vmo').value=v.mode||'land';$('#va').checked=!!v.active;scrollTo(0,0)})}
+function clearVT(){['vi','vn','vs','vb','vk','vm'].forEach(i=>$('#'+i).value='');$('#vi').readOnly=false;$('#va').checked=true;$('#vmo').value='land'}
+$('#vsv').onclick=async()=>{const r=await api('vtype_save',{id:$('#vi').value,name:$('#vn').value,seats:$('#vs').value,base:$('#vb').value,per_km:$('#vk').value,min_fare:$('#vm').value,mode:$('#vmo').value,active:$('#va').checked});if(r.error)return err(r.error);err();clearVT();loadVT()};
+$('#vcl').onclick=()=>{clearVT();err()};
+$('#out').onclick=()=>out();$('#t1').onclick=()=>setTab(1);$('#t2').onclick=()=>setTab(2);$('#t3').onclick=()=>setTab(3);$('#t4').onclick=()=>setTab(4);$('#t5').onclick=()=>setTab(5);
+setInterval(()=>{if(ak&&tab<3&&document.visibilityState==='visible')load()},5000);
+if(ak)api('drivers').then(r=>{if(r.error)out(r.error);else show()});
+</script></body></html>
